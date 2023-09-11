@@ -1,5 +1,6 @@
 ﻿using CalanderCSharp.Context;
 using CalanderCSharp.Entities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -12,6 +13,7 @@ namespace CalanderCSharp.Controllers
         public DateTime End { get; set; }
         public string Description { get; set; }
         public string Title { get; set; }
+        public int UserId { get; set; }
     }
 
     [Route("api/[controller]")]
@@ -19,10 +21,12 @@ namespace CalanderCSharp.Controllers
     public class EventController : ControllerBase
     {
         public readonly CalanderContext context;
+        private readonly IHttpContextAccessor _httpContextAccessor;
 
-        public EventController(CalanderContext context)
+        public EventController(CalanderContext context, IHttpContextAccessor httpContextAccessor)
         {
             this.context = context;
+            _httpContextAccessor = httpContextAccessor;
         }
 
         [HttpGet]
@@ -31,17 +35,39 @@ namespace CalanderCSharp.Controllers
             return context.Events.Where(x => x.End >= DateTime.Now).Take(10).ToList();
         }
 
+        [HttpGet("{userId}")]
+        public IList<CalanderEvent> GetUserEvents(int userId)
+        {
+            return context.Events.Where(x=> x.UserId == userId)
+                .Where(x => x.End >= DateTime.Now).Take(10).ToList();
+        }
+
+        [Authorize]
+        [HttpGet("my")]
+        public IList<CalanderEvent> GetMyEvents()
+        {
+            var userId = JWTContext.GetUser(User);
+            return context.Events.Where(x => x.UserId == userId)
+                .Where(x => x.End >= DateTime.Now).Take(10).ToList();
+        }
+
         [HttpPost("add")]
         public CalanderEvent Add(AddCalanderEvent aEvent)
         {
-            CalanderEvent e = new CalanderEvent { Description = aEvent.Description, Start = aEvent.Start, End = aEvent.End, Title = aEvent.Title };
+            CalanderEvent e = new CalanderEvent {
+                Description = aEvent.Description,
+                Start = aEvent.Start,
+                End = aEvent.End,
+                Title = aEvent.Title,
+                UserId = aEvent.UserId
+            };
             context.Events.Add(e);
             context.SaveChanges();
             return e;
         }
 
-        [HttpGet("free")]
-        public IList<DateTime> GetFreeTime(double dururation, double start, double end)
+        [HttpGet("free/{userid}")]
+        public IList<DateTime> GetFreeTime(double dururation, double start, double end, int userid)
         {
             var t = end - start;
             var v = Math.Floor(t / dururation);
@@ -50,7 +76,7 @@ namespace CalanderCSharp.Controllers
             TimeSpan startTs = TimeSpan.FromHours(start);
             TimeSpan RealEnd = startTs + (ts * v);
 
-            var ev = index();
+            var ev = GetUserEvents(userid);
 
             List<DateTime> FreeTime = new List<DateTime>();
             for (int i = 0; i < 3; i++)
@@ -77,13 +103,18 @@ namespace CalanderCSharp.Controllers
             return FreeTime;
         }
 
+        [Authorize]
         [HttpDelete("Delete/id/{id}")]
         public void Delete(int id)
         {
-            context.Events.Remove(context.Events.FirstOrDefault(x => x.Id == id));
+            var u = JWTContext.GetUser(User);
+            var e = context.Events.FirstOrDefault(x => x.Id == id && x.UserId == u);
+            if (e == null) return;
+            context.Events.Remove(e);
             context.SaveChanges();
         }
-        
+
+        [Authorize]
         [HttpDelete("Delete/all")]
         public void DeleteAll()
         {

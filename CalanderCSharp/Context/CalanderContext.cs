@@ -20,6 +20,12 @@ namespace CalanderCSharp.Context
             base.OnConfiguring(optionsBuilder);
         }
 
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
+        {
+            base.OnModelCreating(modelBuilder);
+        }
+
         public DbSet<CalanderEvent> Events { get; set; }
+        public DbSet<User> Users { get; set; }
     }
 }
