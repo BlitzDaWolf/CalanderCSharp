@@ -27,5 +27,6 @@ namespace CalanderCSharp.Context
 
         public DbSet<CalanderEvent> Events { get; set; }
         public DbSet<User> Users { get; set; }
+        public DbSet<Group> Groups { get; set; }
     }
 }

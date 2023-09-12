@@ -9,5 +9,8 @@
         public DateTime RegistrationTime { get; set; } = DateTime.UtcNow;
 
         public ICollection<CalanderEvent> Events { get; set; } = new List<CalanderEvent>();
+
+        public int? UserGroupId { get; set; }
+        public Group UserGroup { get; set; }
     }
 }

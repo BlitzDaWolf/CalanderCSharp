@@ -13,7 +13,6 @@ namespace CalanderCSharp.Controllers
         public DateTime End { get; set; }
         public string Description { get; set; }
         public string Title { get; set; }
-        public int UserId { get; set; }
     }
 
     [Route("api/[controller]")]
@@ -42,6 +41,14 @@ namespace CalanderCSharp.Controllers
                 .Where(x => x.End >= DateTime.Now).Take(10).ToList();
         }
 
+        [HttpGet("group/{groupId}")]
+        public IList<CalanderEvent> GetGroupEvents(int? groupId)
+        {
+            if(groupId == null) return new List<CalanderEvent>();
+            return context.Events.Where(x => x.GroupId == groupId)
+                .Where(x => x.End >= DateTime.Now).Take(10).ToList();
+        }
+
         [Authorize]
         [HttpGet("my")]
         public IList<CalanderEvent> GetMyEvents()
@@ -51,15 +58,15 @@ namespace CalanderCSharp.Controllers
                 .Where(x => x.End >= DateTime.Now).Take(10).ToList();
         }
 
-        [HttpPost("add")]
-        public CalanderEvent Add(AddCalanderEvent aEvent)
+        [HttpPost("add/{userId}")]
+        public CalanderEvent Add(AddCalanderEvent aEvent, int userId)
         {
             CalanderEvent e = new CalanderEvent {
                 Description = aEvent.Description,
                 Start = aEvent.Start,
                 End = aEvent.End,
                 Title = aEvent.Title,
-                UserId = aEvent.UserId
+                UserId = userId
             };
             context.Events.Add(e);
             context.SaveChanges();
@@ -69,6 +76,12 @@ namespace CalanderCSharp.Controllers
         [HttpGet("free/{userid}")]
         public IList<DateTime> GetFreeTime(double dururation, double start, double end, int userid)
         {
+            User u = context.Users.FirstOrDefault(x => x.Id == userid);
+            if (u == null) return new List<DateTime>();
+            if (u.UserGroupId != 0)
+            {
+                u.UserGroup = context.Groups.FirstOrDefault(x => x.Id == u.UserGroupId);
+            }
             var t = end - start;
             var v = Math.Floor(t / dururation);
 
@@ -76,17 +89,19 @@ namespace CalanderCSharp.Controllers
             TimeSpan startTs = TimeSpan.FromHours(start);
             TimeSpan RealEnd = startTs + (ts * v);
 
-            var ev = GetUserEvents(userid);
+            var ev = GetUserEvents(userid).ToList();
+            ev.AddRange(GetGroupEvents(u.UserGroupId));
 
             List<DateTime> FreeTime = new List<DateTime>();
             for (int i = 0; i < 3; i++)
             {
                 var StartTime = DateTime.Now;
-                StartTime = StartTime.AddHours(-StartTime.Hour + startTs.Hours);
-                StartTime = StartTime.AddMinutes(-StartTime.Minute + startTs.Minutes);
-                StartTime = StartTime.AddSeconds(-StartTime.Second);
-                StartTime = StartTime.AddMicroseconds(-StartTime.Microsecond);
-                StartTime = StartTime.AddDays(i);
+                StartTime = StartTime.AddHours(-StartTime.Hour + startTs.Hours)
+                    .AddMinutes(-StartTime.Minute + startTs.Minutes)
+                    .AddSeconds(-StartTime.Second)
+                    .AddMicroseconds(-StartTime.Microsecond)
+                    .AddDays(i);
+
                 for (int j = 0; j < v; j++)
                 {
                     var time = StartTime.AddMinutes(ts.TotalMinutes * j);
@@ -121,6 +136,25 @@ namespace CalanderCSharp.Controllers
             context.Events.ToList()
                 .ForEach(x=> context.Events.Remove(x));
             context.SaveChanges();
+        }
+
+        [Authorize, HttpPost("group/add")]
+        public CalanderEvent CreateGroupEvent(AddCalanderEvent aEvent)
+        {
+            var userId = JWTContext.GetUser(User);
+            User u = context.Users.FirstOrDefault(x => x.Id == userId);
+            if(u == null) return null;
+            CalanderEvent e = new CalanderEvent
+            {
+                Description = aEvent.Description,
+                Start = aEvent.Start,
+                End = aEvent.End,
+                Title = aEvent.Title,
+                GroupId = u.UserGroupId
+            };
+            context.Events.Add(e);
+            context.SaveChanges();
+            return e;
         }
     }
 }
