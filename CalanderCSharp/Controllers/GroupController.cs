@@ -42,5 +42,21 @@ namespace CalanderCSharp.Controllers
             context.SaveChanges();
             return "Group created";
         }
+
+        [HttpPost("adduser/{userId}")]
+        [Authorize]
+        public void AddUserToGroup(int userId)
+        {
+            var myUserId = JWTContext.GetUser(User);
+            var u = context.Users.FirstOrDefault(u => u.Id == myUserId);
+            if (u == null) return;
+            if (u.UserGroupId == null) return;
+
+            var updateUser = context.Users.FirstOrDefault(x => x.Id == userId && x.UserGroupId == null);
+            if (updateUser == null) return;
+            updateUser.UserGroupId = u.UserGroupId;
+            context.Users.Update(updateUser);
+            context.SaveChanges();
+        }
     }
 }
